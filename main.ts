@@ -33,3 +33,5 @@ writeFileSync(
   join(out, 'dossier.json'),
   buildDossier(out, { text_max_bytes: 163840, screenshots: { max: 3, max_bytes: 262144 }, app_max_files: 993, app_max_bytes: 16777216 }),
 );
+
+console.log('Featherboard dossier rebuilt:', join(out, 'dossier.json'));
