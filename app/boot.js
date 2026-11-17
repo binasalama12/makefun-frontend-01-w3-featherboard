@@ -1,0 +1,49 @@
+const style=document.createElement('link');style.rel='stylesheet';style.href='/style.css';document.head.append(style);
+const API='https://make.fun/api', app=document.querySelector('#app'), memory=new Map();
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cash=x=>'$'+Number(x||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const slug=x=>encodeURIComponent(x||'');
+const left=x=>{const n=new Date(x)-Date.now();if(n<=0)return'Closed';const d=Math.floor(n/864e5),h=Math.floor(n%864e5/36e5),m=Math.floor(n%36e5/6e4);return d?`${d}d ${h}h`:`${h}h ${m}m`};
+const arr=x=>Array.isArray(x)?x:[];
+async function get(path){
+ const url=API+path,key='fb:'+url;let cached=memory.get(url);
+ if(!cached)try{cached=JSON.parse(localStorage.getItem(key))}catch{}
+ if(cached)memory.set(url,cached);
+ const request=fetch(url).then(async r=>{
+  if(r.status===304)return cached?.data;
+  if(r.status===204){if(cached)return cached.data;return fetch(url,{cache:'no-store'}).then(async retry=>{if(!retry.ok)throw Error(`API ${retry.status} at ${path}`);return retry.json()})}
+  if(!r.ok)throw Error(`API ${r.status} at ${path}`);
+  const data=await r.json(),value={data,tag:r.headers.get('etag')};memory.set(url,value);
+  try{localStorage.setItem(key,JSON.stringify(value))}catch{}
+  if(cached){acceptRefresh(path,data);if(location.hash===routeKey)patch()}
+  return data
+ });
+ return cached?cached.data:request
+}
+let all=[], bountyCache=new Map(), activeBoard='', lbData=null, routeKey='';
+function acceptRefresh(path,data){
+ if(path.startsWith('/competitions?'))all=arr(data.items);
+ else if(path.endsWith('/leaderboard'))lbData=data;
+ else if(path.startsWith('/competitions/')){const key=decodeURIComponent(path.split('/')[2]||'');bountyCache.set(key,data);all=[data,...all.filter(x=>x.slug!==key)]}
+}
+function patch(){
+ if(!app.querySelector('.rows')){render(true);return}
+ const fresh=document.createElement('div');fresh.innerHTML=board();
+ const rows=fresh.querySelector('.rows'),detail=fresh.querySelector('#detail');
+ if(rows)app.querySelector('.rows')?.replaceWith(rows);
+ if(detail)app.querySelector('#detail')?.replaceWith(detail);
+}
+function route(){const p=decodeURIComponent(location.hash.slice(1)||'/').split('/').filter(Boolean);return p[0]==='bounty'?{slug:p[1],tab:p[2]||''}:p[0]==='agent'?{agent:p[1]}:{}}
+function title(b){return b.title||b.name||b.slug}
+function pot(b){return b.potUsd??b.livePotUsd??b.rewardAmount??0}
+function fee(b){return b.entryFeeUsd??b.entry_fee_usd??b.entryFee?.amountUsd??0}
+function entries(b){return b.submissionCount??b.entryCount??b.entries_count??0}
+function sorted(){return [...all].sort((a,b)=>{const ac=Date.parse(a.deadline)>Date.now(),bc=Date.parse(b.deadline)>Date.now();return Number(bc)-Number(ac)||(Date.parse(a.deadline)||Infinity)-(Date.parse(b.deadline)||Infinity)})}
+function board(){const bs=sorted();if(!activeBoard||!bs.some(x=>x.slug===activeBoard))activeBoard=bs[0]?.slug||'';const b=bs.find(x=>x.slug===activeBoard);return `<div class="layout"><section class="board"><div class="eyebrow">THE OPEN CALL</div><h1>Find your next<br><em>good problem.</em></h1><p class="sub">Live competitions, ranked by what’s still open.</p><div class="colhead"><span>COMPETITION</span><span>POT / FEE</span><span>TIME / ENTRIES</span></div><div class="rows">${bs.map(x=>`<a class="row ${x.slug===activeBoard?'chosen':''}" href="#/bounty/${slug(x.slug)}"><span class="rowname">${esc(title(x))}<small>${esc(x.category||'Open competition')}</small></span><span class="rowpot">${cash(pot(x))}<small>${Number(fee(x))?cash(fee(x))+' entry fee':'No entry fee'}</small></span><span class="rowtime">${left(x.deadline)}<small>${entries(x).toLocaleString()} entries</small></span></a>`).join('')||'<p class="empty">No competitions found.</p>'}</div></section><section id="detail">${b?detail(b):'<div class="emptydetail">Select a competition</div>'}</section></div>`}
+function detail(b){const p=route(),url=`#/bounty/${slug(b.slug)}`,leader=p.tab==='leaderboard';return `<article class="detail"><div class="eyebrow">COMPETITION DETAIL <span class="openmark">● ${b.acceptingSubmissions?'ACCEPTING ENTRIES':'ENTRY WINDOW CLOSED'}</span></div><h2>${esc(title(b))}</h2><p class="summary">${esc(b.summary||'Build, submit, and climb the rankings.')}</p><div class="stats"><div><small>LIVE POT</small><strong>${cash(pot(b))}</strong></div><div><small>ENTRY FEE</small><strong>${Number(fee(b))?cash(fee(b)):'Free'}</strong></div><div><small>TIME LEFT</small><strong>${left(b.deadline)}</strong></div><div><small>ENTRIES</small><strong>${entries(b).toLocaleString()}</strong></div></div><div class="tabs"><a class="${leader?'':'active'}" href="${url}">Overview</a><a class="${leader?'active':''}" href="${url}/leaderboard">Leaderboard <span>↗</span></a></div>${leader?leaderboard(b):rewards(b)}</article>`}
+function rewards(b){const rewards=arr(b.rewardsNow);return `<h3>Rewards <small class="hint">Live pot ${cash(pot(b))}</small></h3><div class="rewards-table"><div class="reward-head"><span>PLACE</span><span>PRIZE</span><span>POT SHARE</span></div>${(rewards.length?rewards:Object.entries(b.rewards||{}).map(([place,amountUsd])=>({place,amountUsd}))).map(r=>`<div class="reward-line"><b>${Number(r.place)===1?'🏆 ':''}${r.place===0?'Live pot':`#${r.place}`}</b><span>${cash(r.amountUsd??r.baseUsd)}</span><small>${Number(r.feeShareUsd||0)?`+ ${cash(r.feeShareUsd)} fees`:'Base prize'}</small></div>`).join('')}</div><h3 class="desc-title">About this bounty</h3><div class="description">${esc(b.description||b.rules||b.summary||'Details will appear here.')}</div><div class="dates"><span>DEADLINE <b>${b.deadline?new Date(b.deadline).toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short',timeZone:'UTC'})+' UTC':'—'}</b></span><span>STATUS <b>${b.acceptingSubmissions?'Open':'Closed'}</b></span></div>`}
+let virtualStart=0;
+function leaderboard(b){const rows=arr(lbData?.entries);const rowHeight=47,windowSize=9;const start=Math.min(virtualStart,Math.max(0,rows.length-windowSize));const visible=rows.slice(start,start+windowSize);return `<h3>Live standings <small class="hint">${rows.length.toLocaleString()} ranked entries</small></h3><div class="leaders-head"><span>RANK / BUILDER</span><span>JUDGE SCORE</span></div><div class="leaders" id="leaders" data-total="${rows.length}" data-start="${start}" style="height:${Math.min(rows.length*rowHeight,423)}px"><div class="leaders-spacer" style="height:${start*rowHeight}px"></div>${visible.map((x,i)=>{const rank=x.rank||start+i+1,raw=x.values?.judge??x.display?.judge??x.score??'—',score=Number(raw),label=Number.isFinite(score)?(score>1?(score/1e6*100).toFixed(1)+'%':String(score)):raw,handle=x.handle||'builder';return `<a class="leader" href="#/agent/${slug(handle)}" style="height:${rowHeight}px"><span><i>${String(rank).padStart(2,'0')}</i><b>${esc(handle)}</b><small class="entry-title">${esc(x.title||'')}</small></span><strong>${esc(label)}</strong></a>`}).join('')}<div class="leaders-spacer" style="height:${Math.max(0,(rows.length-start-visible.length)*rowHeight)}px"></div></div>`}
+function profile(d,handle){const solutions=arr(d.solutions),record=d.record||{};return `<div class="layout"><section class="board"><div class="eyebrow">BUILDER PROFILE</div><h1><em>${esc(d.display_name||d.handle||handle)}</em></h1><p class="sub">@${esc(d.handle||handle)} · Public make.fun profile</p><a class="back" href="#/">← Back to competitions</a>${d.bio?`<p class="bio">${esc(d.bio)}</p>`:''}</section><section class="detail"><article class="detail"><div class="eyebrow">BUILDER RECORD</div><h2>${esc(d.display_name||d.handle||handle)}</h2><div class="stats"><div><small>ENTERED</small><strong>${record.competitions_entered??solutions.length}</strong></div><div><small>WINS</small><strong>${record.competitions_won??0}</strong></div><div><small>PLACED</small><strong>${record.competitions_placed??0}</strong></div><div><small>PRIZES</small><strong>${cash(record.prize_usd)}</strong></div></div><h3>Entries <small class="hint">${solutions.length} submissions</small></h3>${solutions.map(e=>`<a class="reward profile-entry" href="#/bounty/${slug(e.competition?.slug)}"><span>${esc(e.title||e.competition?.title||'Competition entry')}<small>${esc(e.competition?.title||'')} · ${e.placement?`Place #${e.placement}`:'In progress'}</small></span><b>${e.placement?`#${e.placement}`:'View'}</b></a>`).join('')||'<p class="empty">No public entries listed.</p>'}</article></section></div>`}
+async function render(fromRefresh=false){const p=route();routeKey=location.hash;if(!fromRefresh)window.__shotReady=false;try{if(!all.length)all=arr((await get('/competitions?status=open&activity=times')).items);if(p.agent){app.innerHTML=profile(await get('/profiles/'+encodeURIComponent(p.agent)),p.agent)}else{activeBoard=p.slug||activeBoard;if(p.slug){let b=all.find(x=>x.slug===p.slug);if(!b){b=bountyCache.get(p.slug)||await get('/competitions/'+encodeURIComponent(p.slug));bountyCache.set(p.slug,b);all=[b,...all.filter(x=>x.slug!==p.slug)]}if(p.tab==='leaderboard'){lbData=await get('/competitions/'+encodeURIComponent(p.slug)+'/leaderboard')}else lbData=null}app.innerHTML=board();const leaders=app.querySelector('#leaders');if(leaders)leaders.scrollTop=virtualStart*47}document.title=p.agent?`${p.agent} · Featherboard`:'Featherboard — make.fun';window.__shotReady=true}catch(e){app.innerHTML=`<div class="error"><h2>Couldn’t load the live board</h2><p>${esc(e.message)}</p><button onclick="location.reload()">Try again</button></div>`;window.__shotReady=true}}
+document.addEventListener('scroll',e=>{if(e.target?.id==='leaders'){const next=Math.floor(e.target.scrollTop/47);if(next!==virtualStart){virtualStart=next;render(true)}}},true);window.addEventListener('hashchange',()=>render());render();
