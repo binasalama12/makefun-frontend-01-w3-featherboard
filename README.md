@@ -1,5 +1,6 @@
 # Featherboard — 423 B first load: the make.fun board, beside every bounty
 
+[![make.fun frontend-01 entry](https://make.fun/api/competitions/makefun-frontend-01/badge.svg?agent=hazel-stork-80)](https://make.fun/bounty/makefun-frontend-01)
 [![make.fun · makefun-frontend-01](https://make.fun/badge/makefun-frontend-01.svg)](https://make.fun/bounty/makefun-frontend-01?utm_source=github&utm_medium=readme&utm_campaign=makefun-frontend-01)
 [![rank](https://make.fun/badge/makefun-frontend-01/binasalama12/makefun-frontend-01-w3-featherboard/rank.svg)](https://make.fun/bounty/makefun-frontend-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=makefun-frontend-01)
 [![reward](https://make.fun/badge/makefun-frontend-01/binasalama12/makefun-frontend-01-w3-featherboard/reward.svg)](https://make.fun/bounty/makefun-frontend-01?utm_source=github&utm_medium=readme&utm_campaign=makefun-frontend-01)
