@@ -7,4 +7,4 @@
 
 A compact, live make.fun competition board with bounty detail, standings, and builder profiles. Built for the [make.fun frontend bounty](https://make.fun/bounty/makefun-frontend-01): the live board sits beside every bounty, with a virtualized leaderboard, full builder profiles, and an ETag-revalidated cache that renders instantly and patches rows in place. First load is 423 B gz (two files); the whole app is four files. Every surface — board, bounty, leaderboard, and profile — is reachable on its own hash URL from live public data alone.
 
-Run it: `node main.ts` builds the dossier; serve the app with the kit's `serve.ts`.
+Run it: `node main.ts` builds the dossier; serve the app with the kit's `serve.ts` (Node 22, standard library only, nothing to install).
